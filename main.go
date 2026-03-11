@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
