@@ -215,50 +215,56 @@ func NewLiveSyncWriter(ctx context.Context, couchURL, dbName, passphrase string)
 
 func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content string) error {
 	nowMs := time.Now().UnixMilli()
-	docID := strings.ToLower(vaultPath)	
+	docID := strings.ToLower(vaultPath)
+	
+	// Calculate plaintext size BEFORE any processing
+	plaintextSize := len([]byte(content))
+
 	var chunkID string
 	var chunkData string
 	var err error
-	
+
 	if w.crypto != nil {
-		chunkID, chunkData, err = w.crypto.encryptChunk(content)
+		chunkID, chunkData, err = w.crypto.encryptContent(content)
 		if err != nil {
-			return fmt.Errorf("encrypt chunk: %w", err)
+			return fmt.Errorf("encrypt content: %w", err)
 		}
 	} else {
-		// Unencrypted mode (legacy)
 		raw := make([]byte, 16)
 		rand.Read(raw)
-		chunkID = "h:" + hex.EncodeToString(raw)
+		chunkID = "h:" + base64.URLEncoding.EncodeToString(raw)[:22]
 		chunkData = content
 	}
-	
+
 	// Write chunk
 	chunkDoc := map[string]interface{}{
 		"data": chunkData,
 		"type": "leaf",
 	}
 	if _, err := w.putDoc(ctx, chunkID, chunkDoc); err != nil {
-		return fmt.Errorf("put chunk %s: %w", chunkID, err)
+		return fmt.Errorf("put chunk: %w", err)
 	}
-	slog.Info("chunk written", "id", chunkID[:20]+"...")
-	
-	// Write main document
+
+	// Main doc with CORRECT plaintext size
 	mainDoc := map[string]interface{}{
 		"children": []string{chunkID},
 		"path":     vaultPath,
 		"ctime":    nowMs,
 		"mtime":    nowMs,
-		"size":     len([]byte(content)),
+		"size":     plaintextSize,  // MUST be plaintext bytes
 		"type":     "plain",
 		"eden":     map[string]interface{}{},
 	}
+	
 	if _, err := w.putDoc(ctx, docID, mainDoc); err != nil {
-		return fmt.Errorf("put doc %s: %w", docID, err)
+		return fmt.Errorf("put doc: %w", err)
 	}
-	slog.Info("document written", "id", docID[:30]+"...", "path", vaultPath)
+
+	slog.Info("note written", "path", vaultPath, "size", plaintextSize)
 	return nil
 }
+
+
 
 func (w *LiveSyncWriter) putDoc(ctx context.Context, docID string, doc map[string]interface{}) (string, error) {
 	rev, err := w.db.GetRev(ctx, docID)
