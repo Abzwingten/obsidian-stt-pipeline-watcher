@@ -142,7 +142,7 @@ func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 	combined := append(salt, encrypted...)
 	
 	hash := sha256.Sum256(combined)
-	chunkID := "h:" + hex.EncodeToString(hash[:])
+	chunkID := "h:" + hex.EncodeToString(hash[:22])
 	
 	return chunkID, base64.StdEncoding.EncodeToString(combined), nil
 }
