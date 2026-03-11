@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"text/template"
 	"time"
+	"golang.org/x/crypto/hkdf"
 
 	"github.com/fsnotify/fsnotify"
 	_ "github.com/go-kivik/kivik/v4/couchdb"
@@ -108,13 +109,20 @@ func (c *LiveSyncCrypto) deriveKey(salt []byte) []byte {
 	return pbkdf2.Key([]byte(c.passphrase), salt, 1000, 32, sha512.New)
 }
 
+func (c *LiveSyncCrypto) deriveKeyHKDF(salt []byte) []byte {
+	hk := hkdf.New(sha256.New, []byte(c.passphrase), salt, nil)
+	key := make([]byte, 32)
+	io.ReadFull(hk, key)
+	return key
+}
+
 func (c *LiveSyncCrypto) encryptPath(path string) (string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
 	
-	key := c.deriveKey(salt)
+	key := c.deriveKeyHKDF(salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
