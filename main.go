@@ -25,7 +25,7 @@ import (
 	"text/template"
 	"time"
 	"golang.org/x/crypto/hkdf"
-
+	"github.com/cespare/xxhash/v2"
 	"github.com/fsnotify/fsnotify"
 	_ "github.com/go-kivik/kivik/v4/couchdb"
 	kivik "github.com/go-kivik/kivik/v4"
@@ -147,15 +147,27 @@ func (c *LiveSyncCrypto) encryptContent(data string) (chunkID string, encryptedD
 	combined := append(salt, ciphertext...)
 	
 	encryptedData = base64.StdEncoding.EncodeToString(combined)
-	
+	hash := xxhash.Sum64String(encryptedData)
+	hashBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashBytes, hash)
+	chunkID = "h:" + base64.URLEncoding.EncodeToString(hashBytes)
 	// Chunk ID from hash of encrypted data
-	hash := sha256.Sum256([]byte(encryptedData))
-	chunkID = "h:" + base64.URLEncoding.EncodeToString(hash[:])[:22]
 	
 	return chunkID, encryptedData, nil
 }
 
-
+func utf16Length(s string) int {
+	// Count UTF-16 code units
+	count := 0
+	for _, r := range s {
+		if r > 0xFFFF {
+			count += 2 // Surrogate pair
+		} else {
+			count += 1
+		}
+	}
+	return count
+}
 
 // --- Title Extraction ---
 
@@ -228,7 +240,7 @@ func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content strin
 	docID := strings.ToLower(vaultPath)
 	
 	// Calculate plaintext size BEFORE any processing
-	plaintextSize := len([]byte(content))
+	plaintextSize := utf16Length(content))
 
 	var chunkID string
 	var chunkData string

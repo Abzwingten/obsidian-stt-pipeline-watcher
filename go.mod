@@ -3,6 +3,7 @@ module pipeline-watcher
 go 1.24.0
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/go-kivik/kivik/v4 v4.5.0
 	golang.org/x/crypto v0.45.0
