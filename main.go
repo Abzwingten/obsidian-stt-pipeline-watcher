@@ -116,33 +116,6 @@ func (c *LiveSyncCrypto) deriveKeyHKDF(salt []byte) []byte {
 	return key
 }
 
-func (c *LiveSyncCrypto) encryptPath(path string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	
-	key := c.deriveKeyHKDF(salt)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", err
-	}
-	
-	encrypted := gcm.Seal(nonce, nonce, []byte(path), nil)
-	combined := append(salt, encrypted...)
-	return "encrypted:" + base64.StdEncoding.EncodeToString(combined), nil
-}
-
 func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -169,7 +142,7 @@ func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 	combined := append(salt, encrypted...)
 	
 	hash := sha256.Sum256(combined)
-	chunkID := "f:" + hex.EncodeToString(hash[:])
+	chunkID := "h:" + hex.EncodeToString(hash[:])
 	
 	return chunkID, base64.StdEncoding.EncodeToString(combined), nil
 }
