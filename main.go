@@ -149,7 +149,7 @@ func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 		return "", "", err
 	}
 	
-	key := c.deriveKey(salt)
+	key := c.deriveKeyHKDF(salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", "", err
@@ -242,18 +242,13 @@ func NewLiveSyncWriter(ctx context.Context, couchURL, dbName, passphrase string)
 
 func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content string) error {
 	nowMs := time.Now().UnixMilli()
-	
+	docID := strings.ToLower(vaultPath)	
 	var docID string
 	var chunkID string
 	var chunkData string
 	var err error
 	
 	if w.crypto != nil {
-		// Encrypted mode
-		docID, err = w.crypto.encryptPath(vaultPath)
-		if err != nil {
-			return fmt.Errorf("encrypt path: %w", err)
-		}
 		chunkID, chunkData, err = w.crypto.encryptChunk(content)
 		if err != nil {
 			return fmt.Errorf("encrypt chunk: %w", err)
