@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -116,36 +115,47 @@ func (c *LiveSyncCrypto) deriveKeyHKDF(salt []byte) []byte {
 	return key
 }
 
-func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
+
+
+func (c *LiveSyncCrypto) encryptContent(data string) (chunkID string, encryptedData string, err error) {
+	// Convert to bytes once
+	plaintext := []byte(data)
+	
 	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
+	if _, err = rand.Read(salt); err != nil {
 		return "", "", err
 	}
-	
-	key := c.deriveKeyHKDF(salt)
+
+	key := c.deriveKey(salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
+	if _, err = rand.Read(nonce); err != nil {
 		return "", "", err
 	}
+
+	// Encrypt
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	combined := append(salt, ciphertext...)
 	
-	encrypted := gcm.Seal(nonce, nonce, []byte(data), nil)
-	combined := append(salt, encrypted...)
+	encryptedData = base64.StdEncoding.EncodeToString(combined)
 	
-	hash := sha256.Sum256(combined)
-	chunkID := "h:" + hex.EncodeToString(hash[:22])
+	// Chunk ID from hash of encrypted data
+	hash := sha256.Sum256([]byte(encryptedData))
+	chunkID = "h:" + base64.URLEncoding.EncodeToString(hash[:])[:22]
 	
-	return chunkID, base64.StdEncoding.EncodeToString(combined), nil
+	return chunkID, encryptedData, nil
 }
+
+
 
 // --- Title Extraction ---
 
