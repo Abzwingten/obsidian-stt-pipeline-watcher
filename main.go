@@ -243,7 +243,6 @@ func NewLiveSyncWriter(ctx context.Context, couchURL, dbName, passphrase string)
 func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content string) error {
 	nowMs := time.Now().UnixMilli()
 	docID := strings.ToLower(vaultPath)	
-	var docID string
 	var chunkID string
 	var chunkData string
 	var err error
@@ -255,7 +254,6 @@ func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content strin
 		}
 	} else {
 		// Unencrypted mode (legacy)
-		docID = strings.ToLower(vaultPath)
 		raw := make([]byte, 16)
 		rand.Read(raw)
 		chunkID = "h:" + hex.EncodeToString(raw)
