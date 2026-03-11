@@ -240,7 +240,7 @@ func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content strin
 	docID := strings.ToLower(vaultPath)
 	
 	// Calculate plaintext size BEFORE any processing
-	plaintextSize := utf16Length(content))
+	plaintextSize := utf16Length(content)
 
 	var chunkID string
 	var chunkData string
