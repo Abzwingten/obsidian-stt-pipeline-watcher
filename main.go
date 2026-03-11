@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"text/template"
 	"time"
+	"golang.org/x/crypto/hkdf"
 
 	"github.com/fsnotify/fsnotify"
 	_ "github.com/go-kivik/kivik/v4/couchdb"
@@ -108,31 +109,11 @@ func (c *LiveSyncCrypto) deriveKey(salt []byte) []byte {
 	return pbkdf2.Key([]byte(c.passphrase), salt, 1000, 32, sha512.New)
 }
 
-func (c *LiveSyncCrypto) encryptPath(path string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
-	
-	key := c.deriveKey(salt)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", err
-	}
-	
-	encrypted := gcm.Seal(nonce, nonce, []byte(path), nil)
-	combined := append(salt, encrypted...)
-	return "encrypted:" + base64.StdEncoding.EncodeToString(combined), nil
+func (c *LiveSyncCrypto) deriveKeyHKDF(salt []byte) []byte {
+	hk := hkdf.New(sha256.New, []byte(c.passphrase), salt, nil)
+	key := make([]byte, 32)
+	io.ReadFull(hk, key)
+	return key
 }
 
 func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
@@ -141,7 +122,7 @@ func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 		return "", "", err
 	}
 	
-	key := c.deriveKey(salt)
+	key := c.deriveKeyHKDF(salt)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", "", err
@@ -161,7 +142,7 @@ func (c *LiveSyncCrypto) encryptChunk(data string) (string, string, error) {
 	combined := append(salt, encrypted...)
 	
 	hash := sha256.Sum256(combined)
-	chunkID := "f:" + hex.EncodeToString(hash[:])
+	chunkID := "h:" + hex.EncodeToString(hash[:])
 	
 	return chunkID, base64.StdEncoding.EncodeToString(combined), nil
 }
@@ -234,25 +215,18 @@ func NewLiveSyncWriter(ctx context.Context, couchURL, dbName, passphrase string)
 
 func (w *LiveSyncWriter) WriteNote(ctx context.Context, vaultPath, content string) error {
 	nowMs := time.Now().UnixMilli()
-	
-	var docID string
+	docID := strings.ToLower(vaultPath)	
 	var chunkID string
 	var chunkData string
 	var err error
 	
 	if w.crypto != nil {
-		// Encrypted mode
-		docID, err = w.crypto.encryptPath(vaultPath)
-		if err != nil {
-			return fmt.Errorf("encrypt path: %w", err)
-		}
 		chunkID, chunkData, err = w.crypto.encryptChunk(content)
 		if err != nil {
 			return fmt.Errorf("encrypt chunk: %w", err)
 		}
 	} else {
 		// Unencrypted mode (legacy)
-		docID = strings.ToLower(vaultPath)
 		raw := make([]byte, 16)
 		rand.Read(raw)
 		chunkID = "h:" + hex.EncodeToString(raw)
